@@ -10,6 +10,9 @@
 #include <TTree.h>
 #include <TKey.h>
 #include <TBranch.h>
+#include <TBranchElement.h>
+#include <TBranchSTL.h>
+#include <TBranchObject.h>
 #include <TLeaf.h>
 #include <TH1.h>
 
@@ -35,21 +38,6 @@ bool color = true;
 #else
 bool color = false;
 #endif
-
-struct chars_less {
-  using is_transparent = void;
-  bool operator()(const char* a, const char* b) const noexcept {
-    return strcmp(a,b) < 0;
-  }
-  template <typename T>
-  bool operator()(const T& a, const char* b) const noexcept {
-    return a < b;
-  }
-  template <typename T>
-  bool operator()(const char* a, const T& b) const noexcept {
-    return a < b;
-  }
-};
 
 double file_size(const char* name) {
 #ifdef HAS_SYS_STAT_H
@@ -99,10 +87,13 @@ void print_indent(bool last) {
 void print(
   const char* class_name, const char* name, const char* color_str
 ) {
-  if (color) cout << color_str;
-  cout << class_name;
-  if (color) cout << "\033[0m";
-  cout << ' ' << name;
+  if (class_name) {
+    if (color) cout << color_str;
+    cout << class_name;
+    if (color) cout << "\033[0m";
+    cout << ' ';
+  }
+  if (name) cout << name;
 }
 void print(
   const char* class_name, const char* name, const char* color_str,
@@ -110,23 +101,128 @@ void print(
 ) {
   print(class_name,name,color_str);
   if (cycle!=1) {
-    if (color) cout << "\033[90m;";
+    if (color) cout << "\033[2;37m;";
     cout << cycle;
     if (color) cout << "\033[0m";
   }
 }
+
 void print_branch(
   const char* class_name, const char* name, const char* color_str,
   const char* title
 ) {
   print(class_name, name, color_str);
   if (title && std::strcmp(name,title)) {
-    cout << ": ";
-    if (color) cout << "\033[90m";
-    cout << title;
+    if (color) cout << "\033[2;37m";
+    cout << ": " << title;
     if (color) cout << "\033[0m";
   }
   cout << '\n';
+}
+
+void print(TBranch* b);
+
+void print_branch(TBranch* b) {
+  const char* const bname = b->GetName();
+  TObjArray* branches = b->GetListOfBranches();
+  const Int_t nbranches = branches->GetEntriesFast();
+  TObjArray* const leaves = b->GetListOfLeaves();
+  TLeaf* const last_leaf = static_cast<TLeaf*>(leaves->Last());
+  const char* const lname = last_leaf->GetName();
+  const char* const btitle = b->GetTitle();
+  if (nbranches) {
+    print_branch(b->GetClassName(), bname, "\033[1;35m",
+      strcmp(btitle,lname) ? btitle : nullptr);
+    if (b->GetNleaves() != 1 || strcmp(bname,lname)) {
+      indent.emplace_back();
+      for (TObject* l : *leaves) {
+        print_indent(l==last_leaf);
+        print_branch(
+          static_cast<TLeaf*>(l)->GetTypeName(),
+          static_cast<TLeaf*>(l)->GetName(),
+          "\033[35m",
+          static_cast<TLeaf*>(l)->GetTitle()
+        );
+      }
+      indent.pop_back();
+    }
+    const bool last = indent.back();
+    for (Int_t i=0; i<nbranches; i++) {
+      print_indent(last && nbranches-i==1);
+      print(static_cast<TBranch*>(branches->At(i)));
+    }
+  } else {
+    if (b->GetNleaves() == 1 && !strcmp(bname,lname)) {
+      print_branch(
+        last_leaf->GetTypeName() ?: b->GetClassName(),
+        bname,
+        "\033[35m",
+        last_leaf->GetTitle()
+      );
+    } else {
+      print_branch(
+        b->GetClassName(),
+        bname,
+        "\033[35m",
+        btitle
+      );
+
+      indent.emplace_back();
+      for (TObject* l : *leaves) {
+        print_indent(l==last_leaf);
+        print_branch(
+          static_cast<TLeaf*>(l)->GetTypeName(),
+          static_cast<TLeaf*>(l)->GetName(),
+          "\033[35m",
+          static_cast<TLeaf*>(l)->GetTitle()
+        );
+      }
+      indent.pop_back();
+    }
+  }
+}
+
+void print(TBranch* b) {
+  if (dynamic_cast<TBranchElement*>(b)) {
+    print_branch(b);
+  } else if (dynamic_cast<TBranchSTL*>(b)) {
+    print_branch(b);
+  } else if (dynamic_cast<TBranchObject*>(b)) {
+    print_branch(b);
+  } else {
+    const char* const bname = b->GetName();
+
+    TObjArray* const leaves = b->GetListOfLeaves();
+    TLeaf* const last_leaf = static_cast<TLeaf*>(leaves->Last());
+
+    if (b->GetNleaves() == 1 && !strcmp(bname,last_leaf->GetName())) {
+      print_branch(
+        last_leaf->GetTypeName(),
+        bname,
+        "\033[35m",
+        last_leaf->GetTitle()
+      );
+    } else {
+      print_branch(
+        b->GetClassName(),
+        bname,
+        "\033[35m",
+        b->GetTitle()
+      );
+
+      indent.emplace_back();
+      for (TObject* l : *leaves) {
+        print_indent(l==last_leaf);
+        print_branch(
+          static_cast<TLeaf*>(l)->GetTypeName(),
+          static_cast<TLeaf*>(l)->GetName(),
+          "\033[35m",
+          static_cast<TLeaf*>(l)->GetTitle()
+        );
+      }
+      indent.pop_back();
+    }
+  }
 }
 
 void print(TTree* tree) {
@@ -135,53 +231,18 @@ void print(TTree* tree) {
   ss << tree->GetEntries();
   cout << " [" << ss.rdbuf() << "]\n";
 
-  std::set<const char*,chars_less> bnames;
-
   indent.emplace_back();
-  TObjArray* const branches = tree->GetListOfBranches();
-  TObject* const last_branch = branches->Last();
+
   TList* aliases = tree->GetListOfAliases();
   const bool has_aliases = aliases && aliases->GetEntries() > 0;
+
+  TObjArray* const branches = tree->GetListOfBranches();
+  TObject* const last_branch = branches->Last();
+
   for (TObject* b : *branches) {
-    const char* const bname = static_cast<TBranch*>(b)->GetName();
-    const bool dup = !bnames.emplace(bname).second;
-
-    TObjArray* const leaves = static_cast<TBranch*>(b)->GetListOfLeaves();
-    TLeaf* const last_leave = static_cast<TLeaf*>(leaves->Last());
-
     print_indent(b == last_branch && !has_aliases);
-
-    if (
-      static_cast<TBranch*>(b)->GetNleaves() == 1 &&
-      !strcmp(bname,last_leave->GetName())
-    ) {
-      print_branch(
-        last_leave->GetTypeName(),
-        last_leave->GetName(),
-        dup ? "\033[31m" : "\033[35m",
-        last_leave->GetTitle()
-      );
-    } else {
-      print_branch(
-        static_cast<TBranch*>(b)->GetClassName(),
-        bname,
-        dup ? "\033[31m" : "\033[35m",
-        static_cast<TBranch*>(b)->GetTitle()
-      );
-
-      indent.emplace_back();
-      for (TObject* l : *leaves) {
-        print_indent(l==last_leave);
-        print_branch(
-          static_cast<TLeaf*>(l)->GetTypeName(),
-          static_cast<TLeaf*>(l)->GetName(),
-          "\033[35m",
-          static_cast<TLeaf*>(l)->GetTitle()
-        );
-      } // end leaf loop
-      indent.pop_back();
-    }
-  } // end branch loop
+    print(static_cast<TBranch*>(b));
+  }
 
   if (has_aliases) {
     TObject* const last = aliases->Last();
@@ -212,26 +273,26 @@ void print(TList* list, bool keys=true) {
 
     TClass* const class_ptr = TClass::GetClass(class_name,true,true);
     if (!class_ptr) {
-      print(class_name,name,"\033[31m",cycle);
+      print(class_name,name,"\033[1;31m",cycle);
       cout << '\n';
-    } else {
+    } else if (inherits_from<TTree>(class_ptr)) {
+      print(class_name,name,"\033[1;92m",cycle);
       if (keys) item = static_cast<TKey*>(item)->ReadObj();
-      if (inherits_from<TTree>(class_ptr)) {
-        print(class_name,name,"\033[1;92m",cycle);
-        print(static_cast<TTree*>(item));
-      } else if (inherits_from<TDirectory>(class_ptr)) {
-        print(class_name,name,"\033[1;34m",cycle);
-        cout << '\n';
-        print(static_cast<TDirectory*>(item)->GetListOfKeys());
-      } else if (inherits_from<TH1>(class_ptr)) {
-        print(class_name,name,"\033[34m",cycle);
-        cout << '\n';
-        TH1 *h = static_cast<TH1*>(item);
-        print(h->GetListOfFunctions(),false);
-      } else {
-        print(class_name,name,"\033[34m",cycle);
-        cout << '\n';
-      }
+      print(static_cast<TTree*>(item));
+    } else if (inherits_from<TDirectory>(class_ptr)) {
+      print(class_name,name,"\033[1;34m",cycle);
+      cout << '\n';
+      if (keys) item = static_cast<TKey*>(item)->ReadObj();
+      print(static_cast<TDirectory*>(item)->GetListOfKeys());
+    } else if (inherits_from<TH1>(class_ptr)) {
+      print(class_name,name,"\033[34m",cycle);
+      cout << '\n';
+      if (keys) item = static_cast<TKey*>(item)->ReadObj();
+      TH1 *h = static_cast<TH1*>(item);
+      print(h->GetListOfFunctions(),false);
+    } else {
+      print(class_name,name,"\033[34m",cycle);
+      cout << '\n';
     }
   }
   indent.pop_back();
