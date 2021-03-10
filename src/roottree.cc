@@ -276,7 +276,7 @@ void print(TList* list, bool keys=true) {
       print(class_name,name,"\033[1;31m",cycle);
       cout << '\n';
     } else if (inherits_from<TTree>(class_ptr)) {
-      print(class_name,name,"\033[1;92m",cycle);
+      print(class_name,name,"\033[1;32m",cycle);
       if (keys) item = static_cast<TKey*>(item)->ReadObj();
       print(static_cast<TTree*>(item));
     } else if (inherits_from<TDirectory>(class_ptr)) {
