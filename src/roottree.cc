@@ -89,6 +89,10 @@ void print_indent(bool last) {
     }
   }
 }
+void print_indent_prop() {
+  for (unsigned n=indent.size(), i=1; i<n; ++i)
+    cout << (indent[i] ? " " : "│") << "   ";
+}
 
 void print(
   const char* class_name, const char* name, const char* color_str
@@ -237,13 +241,22 @@ void print(TTree* tree) {
   ss << tree->GetEntries();
   cout << " [" << ss.rdbuf() << "]\n";
 
-  indent.emplace_back();
-
   TList* aliases = tree->GetListOfAliases();
   const bool has_aliases = aliases && aliases->GetEntries() > 0;
 
   TObjArray* const branches = tree->GetListOfBranches();
   TObject* const last_branch = branches->Last();
+
+  if (opt_t) {
+    indent.emplace_back(!(branches->GetEntries() > 0 || has_aliases));
+    const char* title = tree->GetTitle();
+    if (title && *title) {
+      print_indent_prop();
+      cout << title << '\n';
+    }
+  } else {
+    indent.emplace_back();
+  }
 
   for (TObject* b : *branches) {
     print_indent(b == last_branch && !has_aliases);
@@ -294,10 +307,26 @@ void print(TList* list, bool keys=true) {
       print(class_name,name,"\033[34m",cycle);
       cout << '\n';
       if (keys) item = static_cast<TKey*>(item)->ReadObj();
-      TH1 *h = static_cast<TH1*>(item);
-      print(h->GetListOfFunctions(),false);
+      if (opt_t) {
+        const char* title = item->GetTitle();
+        if (title && *title) {
+          // TODO: add vertical bar if ListOfFunctions is not empty
+          print_indent_prop();
+          cout << "    " << title << '\n';
+        }
+      }
+      print(static_cast<TH1*>(item)->GetListOfFunctions(),false);
     } else {
       print(class_name,name,"\033[34m",cycle);
+      if (opt_t) {
+        if (keys) item = static_cast<TKey*>(item)->ReadObj();
+        const char* title = item->GetTitle();
+        if (title && *title) {
+          cout << '\n';
+          print_indent_prop();
+          cout << "    " << title;
+        }
+      }
       cout << '\n';
     }
   }
