@@ -353,13 +353,13 @@ int main(int argc, char** argv) {
     print_usage(argv[0]);
     return 1;
   }
-#ifdef HAS_UNISTD_H
   for (int i=1; i<argc; ++i) {
     if (!strcmp(argv[i],"--help")) {
       print_usage(argv[0]);
       return 0;
     }
   }
+#ifdef HAS_UNISTD_H
   for (int o; (o = getopt(argc, argv, "hcCstbi")) != -1; ) {
     switch (o) {
       case 'c': opt_c = opt_true;  break;
@@ -369,13 +369,7 @@ int main(int argc, char** argv) {
       case 'b': opt_b = true; break;
       case 'i': opt_i = true; break;
       case 'h': print_usage(argv[0]); return 0;
-      default :
-        cerr << "Unknown option ";
-        if (isprint(optopt))
-          cerr << '-' << char(optopt) << '\n';
-        else
-          cerr << "character " << std::hex << char(optopt) << '\n';
-        return 1;
+      default : return 1;
     }
   }
   if (!(optind<argc)) {
