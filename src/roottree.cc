@@ -1,7 +1,6 @@
 #include <iostream>
 #include <sstream>
 #include <vector>
-#include <set>
 #include <locale>
 #include <stdexcept>
 #include <cstring>
@@ -33,11 +32,18 @@ using std::cout;
 using std::cerr;
 using std::endl;
 
+enum opt_val : uint8_t { opt_false=0, opt_true=1, opt_auto=2 };
+
+opt_val opt_c = // color
 #ifdef HAS_UNISTD_H
-bool color = true;
+  opt_auto;
 #else
-bool color = false;
+  opt_false;
 #endif
+bool opt_s = false, // print file size
+     opt_t = false, // print objects' titles
+     opt_b = false, // print histograms' binning
+     opt_i = false; // print histograms' integrals
 
 double file_size(const char* name) {
 #ifdef HAS_SYS_STAT_H
@@ -88,9 +94,9 @@ void print(
   const char* class_name, const char* name, const char* color_str
 ) {
   if (class_name) {
-    if (color) cout << color_str;
+    if (opt_c) cout << color_str;
     cout << class_name;
-    if (color) cout << "\033[0m";
+    if (opt_c) cout << "\033[0m";
     cout << ' ';
   }
   if (name) cout << name;
@@ -101,9 +107,9 @@ void print(
 ) {
   print(class_name,name,color_str);
   if (cycle!=1) {
-    if (color) cout << "\033[2;37m;";
+    if (opt_c) cout << "\033[2;37m;";
     cout << cycle;
-    if (color) cout << "\033[0m";
+    if (opt_c) cout << "\033[0m";
   }
 }
 
@@ -113,9 +119,9 @@ void print_branch(
 ) {
   print(class_name, name, color_str);
   if (title && std::strcmp(name,title)) {
-    if (color) cout << "\033[2;37m";
+    if (opt_c) cout << "\033[2;37m";
     cout << ": " << title;
-    if (color) cout << "\033[0m";
+    if (opt_c) cout << "\033[0m";
   }
   cout << '\n';
 }
@@ -302,28 +308,75 @@ void print(TList* list, bool keys=true) {
 // - show histogram title
 // - show histogram binning
 // - show histogram integral
-// - color: auto, always, never
+// - opt_c: auto, always, never
+
+void print_usage(const char* prog) {
+  cout << "usage: " << prog <<
+#ifdef HAS_UNISTD_H
+    " [OPTION]... file.root\n"
+    "  -c           force color output\n"
+    "  -C           do not color output\n"
+    "  -s           print file size\n"
+    "  -t           print objects' titles\n"
+    "  -b           print histograms' binning\n"
+    "  -i           print histograms' integrals\n"
+    "  -h, --help   display this help text and exit\n";
+#else
+    " file.root\n";
+#endif
+}
 
 int main(int argc, char** argv) {
   if (argc < 2) {
-    cout << "usage: " << argv[0] << " file.root\n";
+    print_usage(argv[0]);
     return 1;
   }
 #ifdef HAS_UNISTD_H
-  color = isatty(1);
+  for (int i=1; i<argc; ++i) {
+    if (!strcmp(argv[i],"--help")) {
+      print_usage(argv[0]);
+      return 0;
+    }
+  }
+  for (int o; (o = getopt(argc, argv, "hcCstbi")) != -1; ) {
+    switch (o) {
+      case 'c': opt_c = opt_true;  break;
+      case 'C': opt_c = opt_false; break;
+      case 's': opt_s = true; break;
+      case 't': opt_t = true; break;
+      case 'b': opt_b = true; break;
+      case 'i': opt_i = true; break;
+      case 'h': print_usage(argv[0]); return 0;
+      default :
+        cerr << "Unknown option ";
+        if (isprint(optopt))
+          cerr << '-' << char(optopt) << '\n';
+        else
+          cerr << "character " << std::hex << char(optopt) << '\n';
+        return 1;
+    }
+  }
+  if (!(optind<argc)) {
+    print_usage(argv[0]);
+    return 1;
+  }
+  if (opt_c==opt_auto) opt_c = isatty(1) ? opt_true : opt_false;
+  const char* fname = argv[optind];
+#else
+  const char* fname = argv[1];
 #endif
 
   try {
-    print_file_size(argv[1]);
+    print_file_size(fname);
   } catch (const std::exception& e) {
-    if (color) cerr << "\033[31m";
-    cerr << "Failed to open file \"" << argv[1] << "\"\n" << e.what();
-    if (color) cerr << "\033[0m";
+    if (opt_c) cerr << "\033[31m";
+    cerr << "Failed to open file \"" << fname << "\"\n" << e.what();
+    if (opt_c) cerr << "\033[0m";
     cerr << '\n';
     return 1;
   }
 
-  TFile file(argv[1]);
+  TFile file(fname);
   if (file.IsZombie()) return 1;
 
   print(file.GetListOfKeys());
