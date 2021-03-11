@@ -44,6 +44,7 @@ bool opt_s = false, // print file size
      opt_t = false, // print objects' titles
      opt_b = false, // print histograms' binning
      opt_i = false, // print histograms' integrals
+     opt_p = false, // use Print() for specified objects
      opt_map = false,
      opt_ls = false,
      opt_streamer = false;
@@ -380,21 +381,20 @@ void print(TObject* obj) {
 
 void print_usage(const char* prog) {
   cout << "usage: " << prog <<
+    " [OPTION]... file.root [names of objects]\n"
 #ifdef HAS_UNISTD_H
-    " [OPTION]... file.root\n"
     "  -c           force color output\n"
     "  -C           do not color output\n"
     "  -s           print file size\n"
     "  -t           print objects' titles\n"
     "  -b           print histograms' binning\n"
     "  -i           print histograms' integrals\n"
+    "  -p           use Print() for specified objects\n"
+#endif
     "  --ls         call TFile::ls()\n"
     "  --map        call TFile::Map()\n"
     "  --streamer   call TFile::ShowStreamerInfo()\n"
     "  -h, --help   display this help text and exit\n";
-#else
-    " file.root\n";
-#endif
 }
 
 int main(int argc, char** argv) {
@@ -421,9 +421,8 @@ int main(int argc, char** argv) {
         argv[j] = argv[j+1];
     } else ++i;
   }
-  const char* objname = nullptr;
 #ifdef HAS_UNISTD_H
-  for (int o; (o = getopt(argc,argv,"hcCstbio:")) != -1; ) {
+  for (int o; (o = getopt(argc,argv,"hcCstbip")) != -1; ) {
     switch (o) {
       case 'c': opt_c = opt_true;  break;
       case 'C': opt_c = opt_false; break;
@@ -431,7 +430,7 @@ int main(int argc, char** argv) {
       case 't': opt_t = true; break;
       case 'b': opt_b = true; break;
       case 'i': opt_i = true; break;
-      case 'o': objname = optarg; break;
+      case 'p': opt_p = true; break;
       case 'h': print_usage(argv[0]); return 0;
       default : return 1;
     }
@@ -441,10 +440,11 @@ int main(int argc, char** argv) {
     return 1;
   }
   if (opt_c==opt_auto) opt_c = isatty(1) ? opt_true : opt_false;
-  const char* fname = argv[optind];
 #else
-  const char* fname = argv[1];
+  int optind = 1;
 #endif
+  const char* fname = argv[optind];
+  ++optind;
 
   if (opt_s) {
     try {
@@ -462,14 +462,34 @@ int main(int argc, char** argv) {
     if (opt_ls) file.ls();
     if (opt_map) file.Map();
     if (opt_streamer) file.ShowStreamerInfo();
-  } else if (objname) {
-    TObject* obj = file.Get(objname);
-    if (!obj) {
-      cerr << "Cannot get object \"" << objname << "\"\n";
-      return 1;
+  } else if (opt_p) {
+    if (optind==argc) {
+      file.Print();
+      file.GetListOfKeys()->Print();
+    } else {
+      for (; optind<argc; ++optind) {
+        const char* objname = argv[optind];
+        TObject* obj = file.Get(objname);
+        if (!obj) {
+          cerr << "Cannot get object \"" << objname << "\"\n";
+          return 1;
+        }
+        obj->Print();
+      }
     }
-    print(obj);
   } else {
-    print(file.GetListOfKeys());
+    if (optind==argc) {
+      print(file.GetListOfKeys());
+    } else {
+      for (; optind<argc; ++optind) {
+        const char* objname = argv[optind];
+        TObject* obj = file.Get(objname);
+        if (!obj) {
+          cerr << "Cannot get object \"" << objname << "\"\n";
+          return 1;
+        }
+        print(obj);
+      }
+    }
   }
 }
