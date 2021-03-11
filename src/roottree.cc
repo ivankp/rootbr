@@ -304,12 +304,6 @@ void print(TList* list, bool keys=true) {
   indent.pop_back();
 }
 
-// Options:
-// - show histogram title
-// - show histogram binning
-// - show histogram integral
-// - opt_c: auto, always, never
-
 void print_usage(const char* prog) {
   cout << "usage: " << prog <<
 #ifdef HAS_UNISTD_H
@@ -366,14 +360,16 @@ int main(int argc, char** argv) {
   const char* fname = argv[1];
 #endif
 
-  try {
-    print_file_size(fname);
-  } catch (const std::exception& e) {
-    if (opt_c) cerr << "\033[31m";
-    cerr << "Failed to open file \"" << fname << "\"\n" << e.what();
-    if (opt_c) cerr << "\033[0m";
-    cerr << '\n';
-    return 1;
+  if (opt_s) {
+    try {
+      print_file_size(fname);
+    } catch (const std::exception& e) {
+      if (opt_c) cerr << "\033[31m";
+      cerr << "Failed to open file \"" << fname << "\"\n" << e.what();
+      if (opt_c) cerr << "\033[0m";
+      cerr << '\n';
+      return 1;
+    }
   }
 
   TFile file(fname);
