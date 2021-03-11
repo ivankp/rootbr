@@ -18,7 +18,7 @@ all: bin/roottree
 
 C_roottree := $(ROOT_CPPFLAGS)
 LF_roottree := $(ROOT_LDFLAGS)
-L_roottree := $(ROOT_LDLIBS)
+L_roottree := -L$(ROOT_LIBDIR) -lCore -lRIO -lTree -lHist
 
 #####################################################################
 
