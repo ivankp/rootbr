@@ -389,7 +389,7 @@ void print_usage(const char* prog) {
     "  -t           print objects' titles\n"
     "  -b           print histograms' binning\n"
     "  -i           print histograms' integrals\n"
-    "  -p           use Print() for specified objects\n"
+    "  -p           use Print()\n"
 #endif
     "  --ls         call TFile::ls()\n"
     "  --map        call TFile::Map()\n"
@@ -404,8 +404,7 @@ int main(int argc, char** argv) {
   }
   for (int i=1; i<argc; ) {
     const char* arg = argv[i];
-    if (!strncmp(arg,"--",2)) {
-      arg += 2;
+    if (*(arg++)=='-' && *(arg++)=='-') {
       if (!strcmp(arg,"help")) {
         print_usage(argv[0]);
         return 0;
@@ -462,34 +461,23 @@ int main(int argc, char** argv) {
     if (opt_ls) file.ls();
     if (opt_map) file.Map();
     if (opt_streamer) file.ShowStreamerInfo();
-  } else if (opt_p) {
-    if (optind==argc) {
+  } else if (optind==argc) {
+    if (opt_p) {
       file.Print();
       file.GetListOfKeys()->Print();
     } else {
-      for (; optind<argc; ++optind) {
-        const char* objname = argv[optind];
-        TObject* obj = file.Get(objname);
-        if (!obj) {
-          cerr << "Cannot get object \"" << objname << "\"\n";
-          return 1;
-        }
-        obj->Print();
-      }
+      print(file.GetListOfKeys());
     }
   } else {
-    if (optind==argc) {
-      print(file.GetListOfKeys());
-    } else {
-      for (; optind<argc; ++optind) {
-        const char* objname = argv[optind];
-        TObject* obj = file.Get(objname);
-        if (!obj) {
-          cerr << "Cannot get object \"" << objname << "\"\n";
-          return 1;
-        }
-        print(obj);
+    for (; optind<argc; ++optind) {
+      const char* objname = argv[optind];
+      TObject* obj = file.Get(objname);
+      if (!obj) {
+        cerr << "Cannot get object \"" << objname << "\"\n";
+        return 1;
       }
+      if (opt_p) obj->Print();
+      else print(obj);
     }
   }
 }
