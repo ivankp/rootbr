@@ -81,17 +81,18 @@ void print_indent(bool last) {
     for (unsigned i=1;; ++i) {
       const bool l = indent[i];
       if (i == n) {
-        cout << (l ? "└" : "├") << "── ";
+        cout << (l ? "└── " : "├── ");
         break;
       } else {
-        cout << (l ? " " : "│") << "   ";
+        cout << (l ? "    " : "│   ");
       }
     }
   }
 }
-void print_indent_prop() {
+void print_indent_prop(bool sub=false) {
   for (unsigned n=indent.size(), i=1; i<n; ++i)
-    cout << (indent[i] ? " " : "│") << "   ";
+    cout << (indent[i] ? "    " : "│   ");
+  cout << (sub ? "│   " : "    ");
 }
 
 void print(
@@ -248,15 +249,13 @@ void print(TTree* tree) {
   TObject* const last_branch = branches->Last();
 
   if (opt_t) {
-    indent.emplace_back(!(branches->GetEntries() > 0 || has_aliases));
     const char* title = tree->GetTitle();
     if (title && *title) {
-      print_indent_prop();
+      print_indent_prop(branches->GetEntries() > 0 || has_aliases);
       cout << title << '\n';
     }
-  } else {
-    indent.emplace_back();
   }
+  indent.emplace_back();
 
   for (TObject* b : *branches) {
     print_indent(b == last_branch && !has_aliases);
@@ -307,15 +306,15 @@ void print(TList* list, bool keys=true) {
       print(class_name,name,"\033[34m",cycle);
       cout << '\n';
       if (keys) item = static_cast<TKey*>(item)->ReadObj();
+      TList* fcns = static_cast<TH1*>(item)->GetListOfFunctions();
       if (opt_t) {
         const char* title = item->GetTitle();
         if (title && *title) {
-          // TODO: add vertical bar if ListOfFunctions is not empty
-          print_indent_prop();
-          cout << "    " << title << '\n';
+          print_indent_prop(fcns && fcns->GetEntries() > 0);
+          cout << title << '\n';
         }
       }
-      print(static_cast<TH1*>(item)->GetListOfFunctions(),false);
+      print(fcns,false);
     } else {
       print(class_name,name,"\033[34m",cycle);
       if (opt_t) {
