@@ -43,7 +43,10 @@ opt_val opt_c = // color
 bool opt_s = false, // print file size
      opt_t = false, // print objects' titles
      opt_b = false, // print histograms' binning
-     opt_i = false; // print histograms' integrals
+     opt_i = false, // print histograms' integrals
+     opt_map = false,
+     opt_ls = false,
+     opt_streamer = false;
 
 double file_size(const char* name) {
 #ifdef HAS_SYS_STAT_H
@@ -68,6 +71,8 @@ void print_file_size(const char* name) {
   cout << ss.rdbuf();
   cout.flush();
 }
+
+#define non_empty_diff(a,b) a && *a && strcmp(a,b)
 
 template <typename T>
 bool inherits_from(TClass* c) {
@@ -123,7 +128,7 @@ void print_branch(
   const char* title
 ) {
   print(class_name, name, color_str);
-  if (title && std::strcmp(name,title)) {
+  if (non_empty_diff(title,name)) {
     if (opt_c) cout << "\033[2;37m";
     cout << ": " << title;
     if (opt_c) cout << "\033[0m";
@@ -250,7 +255,7 @@ void print(TTree* tree) {
 
   if (opt_t) {
     const char* title = tree->GetTitle();
-    if (title && *title) {
+    if (non_empty_diff(title,tree->GetName())) {
       print_indent_prop(branches->GetEntries() > 0 || has_aliases);
       cout << title << '\n';
     }
@@ -267,11 +272,15 @@ void print(TTree* tree) {
     for (TObject* alias : *aliases) {
       print_indent(alias == last);
       const char* name = alias->GetName();
-      cout << name << " -> " << tree->GetAlias(name) << '\n';
+      cout << name;
+      cout << (opt_c ? " \033[36m->\033[0m " : " -> ");
+      cout << tree->GetAlias(name) << '\n';
     }
   }
   indent.pop_back();
 }
+
+void print(TH1* hist);
 
 void print(TList* list, bool keys=true) {
   indent.emplace_back();
@@ -304,23 +313,14 @@ void print(TList* list, bool keys=true) {
       print(static_cast<TDirectory*>(item)->GetListOfKeys());
     } else if (inherits_from<TH1>(class_ptr)) {
       print(class_name,name,"\033[34m",cycle);
-      cout << '\n';
       if (keys) item = static_cast<TKey*>(item)->ReadObj();
-      TList* fcns = static_cast<TH1*>(item)->GetListOfFunctions();
-      if (opt_t) {
-        const char* title = item->GetTitle();
-        if (title && *title) {
-          print_indent_prop(fcns && fcns->GetEntries() > 0);
-          cout << title << '\n';
-        }
-      }
-      print(fcns,false);
+      print(static_cast<TH1*>(item));
     } else {
       print(class_name,name,"\033[34m",cycle);
       if (opt_t) {
         if (keys) item = static_cast<TKey*>(item)->ReadObj();
         const char* title = item->GetTitle();
-        if (title && *title) {
+        if (non_empty_diff(title,name)) {
           cout << '\n';
           print_indent_prop();
           cout << "    " << title;
@@ -330,6 +330,52 @@ void print(TList* list, bool keys=true) {
     }
   }
   indent.pop_back();
+}
+
+void print(TH1* hist) {
+  cout << '\n';
+  TList* fcns = hist->GetListOfFunctions();
+  if (opt_t) {
+    const char* title = hist->GetTitle();
+    if (non_empty_diff(title,hist->GetName())) {
+      print_indent_prop(fcns && fcns->GetEntries() > 0);
+      cout << title << '\n';
+    }
+  }
+  print(fcns,false);
+}
+
+void print(TObject* obj) {
+  const char* const class_name = obj->ClassName();
+  const char* const name = obj->GetName();
+  if (TTree* p = dynamic_cast<TTree*>(obj)) {
+    print(class_name,name,"\033[1;32m");
+    indent.emplace_back();
+    print(p);
+    indent.pop_back();
+  } else if (TDirectory* p = dynamic_cast<TDirectory*>(obj)) {
+    print(class_name,name,"\033[1;34m");
+    cout << '\n';
+    indent.emplace_back();
+    print(p->GetListOfKeys());
+    indent.pop_back();
+  } else if (TH1* p = dynamic_cast<TH1*>(obj)) {
+    print(class_name,name,"\033[34m");
+    indent.emplace_back();
+    print(p);
+    indent.pop_back();
+  } else {
+    print(class_name,name,"\033[34m");
+    if (opt_t) {
+      const char* title = obj->GetTitle();
+      if (non_empty_diff(title,name)) {
+        cout << '\n';
+        print_indent_prop();
+        cout << "    " << title;
+      }
+    }
+    cout << '\n';
+  }
 }
 
 void print_usage(const char* prog) {
@@ -342,6 +388,9 @@ void print_usage(const char* prog) {
     "  -t           print objects' titles\n"
     "  -b           print histograms' binning\n"
     "  -i           print histograms' integrals\n"
+    "  --ls         call TFile::ls()\n"
+    "  --map        call TFile::Map()\n"
+    "  --streamer   call TFile::ShowStreamerInfo()\n"
     "  -h, --help   display this help text and exit\n";
 #else
     " file.root\n";
@@ -353,14 +402,28 @@ int main(int argc, char** argv) {
     print_usage(argv[0]);
     return 1;
   }
-  for (int i=1; i<argc; ++i) {
-    if (!strcmp(argv[i],"--help")) {
-      print_usage(argv[0]);
-      return 0;
-    }
+  for (int i=1; i<argc; ) {
+    const char* arg = argv[i];
+    if (!strncmp(arg,"--",2)) {
+      arg += 2;
+      if (!strcmp(arg,"help")) {
+        print_usage(argv[0]);
+        return 0;
+      } else if (!strcmp(arg,"ls")) { opt_ls = true;
+      } else if (!strcmp(arg,"map")) { opt_map = true;
+      } else if (!strcmp(arg,"streamer")) { opt_streamer = true;
+      } else {
+        cerr << "invalid option --" << arg << '\n';
+        return 1;
+      }
+      --argc;
+      for (int j=i; j<argc; ++j)
+        argv[j] = argv[j+1];
+    } else ++i;
   }
+  const char* objname = nullptr;
 #ifdef HAS_UNISTD_H
-  for (int o; (o = getopt(argc, argv, "hcCstbi")) != -1; ) {
+  for (int o; (o = getopt(argc,argv,"hcCstbio:")) != -1; ) {
     switch (o) {
       case 'c': opt_c = opt_true;  break;
       case 'C': opt_c = opt_false; break;
@@ -368,6 +431,7 @@ int main(int argc, char** argv) {
       case 't': opt_t = true; break;
       case 'b': opt_b = true; break;
       case 'i': opt_i = true; break;
+      case 'o': objname = optarg; break;
       case 'h': print_usage(argv[0]); return 0;
       default : return 1;
     }
@@ -386,10 +450,7 @@ int main(int argc, char** argv) {
     try {
       print_file_size(fname);
     } catch (const std::exception& e) {
-      if (opt_c) cerr << "\033[31m";
-      cerr << "Failed to open file \"" << fname << "\"\n" << e.what();
-      if (opt_c) cerr << "\033[0m";
-      cerr << '\n';
+      cerr << "Failed to open file \"" << fname << "\"\n" << e.what() << '\n';
       return 1;
     }
   }
@@ -397,5 +458,18 @@ int main(int argc, char** argv) {
   TFile file(fname);
   if (file.IsZombie()) return 1;
 
-  print(file.GetListOfKeys());
+  if (opt_map || opt_ls || opt_streamer) {
+    if (opt_ls) file.ls();
+    if (opt_map) file.Map();
+    if (opt_streamer) file.ShowStreamerInfo();
+  } else if (objname) {
+    TObject* obj = file.Get(objname);
+    if (!obj) {
+      cerr << "Cannot get object \"" << objname << "\"\n";
+      return 1;
+    }
+    print(obj);
+  } else {
+    print(file.GetListOfKeys());
+  }
 }
