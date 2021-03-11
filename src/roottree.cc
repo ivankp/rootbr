@@ -460,12 +460,8 @@ int main(int argc, char** argv) {
     if (opt_map) file.Map();
     if (opt_streamer) file.ShowStreamerInfo();
   } else if (optind==argc) {
-    if (opt_p) {
-      file.Print();
-      file.GetListOfKeys()->Print();
-    } else {
-      print(file.GetListOfKeys());
-    }
+    if (opt_p) file.ls();
+    else print(file.GetListOfKeys());
   } else {
     for (; optind<argc; ++optind) {
       const char* objname = argv[optind];
@@ -474,8 +470,10 @@ int main(int argc, char** argv) {
         cerr << "Cannot get object \"" << objname << "\"\n";
         return 1;
       }
-      if (opt_p) obj->Print();
-      else print(obj);
+      if (opt_p) {
+        if (auto* p = dynamic_cast<TDirectory*>(obj)) p->ls();
+        else obj->Print();
+      } else print(obj);
     }
   }
 }
