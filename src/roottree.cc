@@ -137,9 +137,9 @@ void print_branch(
   cout << '\n';
 }
 
-void print(TBranch* b);
+void print(TBranch* b, bool last);
 
-void print_branch(TBranch* b) {
+void print_branch(TBranch* b, bool last) {
   const char* const bname = b->GetName();
   TObjArray* branches = b->GetListOfBranches();
   const Int_t nbranches = branches->GetEntriesFast();
@@ -148,6 +148,7 @@ void print_branch(TBranch* b) {
   const char* const lname = last_leaf->GetName();
   const char* const btitle = b->GetTitle();
   if (nbranches) {
+    print_indent(false);
     print_branch(b->GetClassName(), bname, "\033[1;35m",
       strcmp(btitle,lname) ? btitle : nullptr);
     if (b->GetNleaves() != 1 || strcmp(bname,lname)) {
@@ -163,12 +164,10 @@ void print_branch(TBranch* b) {
       }
       indent.pop_back();
     }
-    const bool last = indent.back();
-    for (Int_t i=0; i<nbranches; i++) {
-      print_indent(last && nbranches-i==1);
-      print(static_cast<TBranch*>(branches->At(i)));
-    }
+    for (Int_t i=0; i<nbranches; i++)
+      print(static_cast<TBranch*>(branches->At(i)), nbranches-i==1);
   } else {
+    print_indent(last);
     if (b->GetNleaves() == 1 && !strcmp(bname,lname)) {
       print_branch(
         last_leaf->GetTypeName() ?: b->GetClassName(),
@@ -199,14 +198,15 @@ void print_branch(TBranch* b) {
   }
 }
 
-void print(TBranch* b) {
+void print(TBranch* b, bool last) {
   if (dynamic_cast<TBranchElement*>(b)) {
-    print_branch(b);
+    print_branch(b,last);
   } else if (dynamic_cast<TBranchSTL*>(b)) {
-    print_branch(b);
+    print_branch(b,last);
   } else if (dynamic_cast<TBranchObject*>(b)) {
-    print_branch(b);
+    print_branch(b,last);
   } else {
+    print_indent(last);
     const char* const bname = b->GetName();
 
     TObjArray* const leaves = b->GetListOfLeaves();
@@ -263,10 +263,8 @@ void print(TTree* tree) {
   }
   indent.emplace_back();
 
-  for (TObject* b : *branches) {
-    print_indent(b == last_branch && !has_aliases);
-    print(static_cast<TBranch*>(b));
-  }
+  for (TObject* b : *branches)
+    print(static_cast<TBranch*>(b), b == last_branch && !has_aliases);
 
   if (has_aliases) {
     TObject* const last = aliases->Last();
