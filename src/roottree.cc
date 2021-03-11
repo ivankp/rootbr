@@ -387,7 +387,7 @@ void print_usage(const char* prog) {
     "  -t           print objects' titles\n"
     "  -b           print histograms' binning\n"
     "  -i           print histograms' integrals\n"
-    "  -p           use Print()\n"
+    "  -p           use Print() or ls()\n"
 #endif
     "  --ls         call TFile::ls()\n"
     "  --map        call TFile::Map()\n"
