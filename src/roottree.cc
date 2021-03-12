@@ -331,7 +331,7 @@ void print(TList* list, bool keys=true) {
   indent.pop_back();
 }
 
-void print_hist_binning(TH1* h) {
+void print_hist_binning(TH1* h, bool sub) {
   std::stringstream ss;
   const TAxis* axes[3] { };
   const int na = h->GetDimension();
@@ -340,6 +340,7 @@ void print_hist_binning(TH1* h) {
   if (na>2) axes[2] = h->GetZaxis();
   ss.precision(std::numeric_limits<double>::max_digits10);
   for (int i=0; i<na; ++i) {
+    print_indent_prop(sub);
     ss << "xyz"[i] << ": ";
     const TAxis* const a = axes[i];
     if (i) ss << ',';
@@ -375,10 +376,8 @@ void print(TH1* hist) {
       cout << title << '\n';
     }
   }
-  if (opt_b) {
-    print_indent_prop(has_fcns);
-    print_hist_binning(hist);
-  }
+  if (opt_b)
+    print_hist_binning(hist,has_fcns);
   if (opt_i) {
     print_indent_prop(has_fcns);
     cout << "∫: " << hist->Integral(0,-1) << '\n';
