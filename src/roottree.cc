@@ -73,7 +73,7 @@ void print_file_size(const char* name) {
   cout.flush();
 }
 
-#define non_empty_diff(a,b) a && *a && strcmp(a,b)
+#define non_empty_cmp(a,b) a && *a && strcmp(a,b)
 
 template <typename T>
 bool inherits_from(TClass* c) {
@@ -129,7 +129,7 @@ void print_branch(
   const char* title
 ) {
   print(class_name, name, color_str);
-  if (non_empty_diff(title,name)) {
+  if (non_empty_cmp(title,name)) {
     if (opt_c) cout << "\033[2;37m";
     cout << ": " << title;
     if (opt_c) cout << "\033[0m";
@@ -256,7 +256,7 @@ void print(TTree* tree) {
 
   if (opt_t) {
     const char* title = tree->GetTitle();
-    if (non_empty_diff(title,tree->GetName())) {
+    if (non_empty_cmp(title,tree->GetName())) {
       print_indent_prop(branches->GetEntries() > 0 || has_aliases);
       cout << title << '\n';
     }
@@ -319,7 +319,7 @@ void print(TList* list, bool keys=true) {
       if (opt_t) {
         if (keys) item = static_cast<TKey*>(item)->ReadObj();
         const char* title = item->GetTitle();
-        if (non_empty_diff(title,name)) {
+        if (non_empty_cmp(title,name)) {
           cout << '\n';
           print_indent_prop();
           cout << "    " << title;
@@ -331,15 +331,57 @@ void print(TList* list, bool keys=true) {
   indent.pop_back();
 }
 
+void print_hist_binning(TH1* h) {
+  std::stringstream ss;
+  const TAxis* axes[3] { };
+  const int na = h->GetDimension();
+  if (na>0) axes[0] = h->GetXaxis();
+  if (na>1) axes[1] = h->GetYaxis();
+  if (na>2) axes[2] = h->GetZaxis();
+  ss.precision(std::numeric_limits<double>::max_digits10);
+  for (int i=0; i<na; ++i) {
+    ss << "xyz"[i] << ": ";
+    const TAxis* const a = axes[i];
+    if (i) ss << ',';
+    const auto* bins = a->GetXbins();
+    if (int n = bins->GetSize()) {
+      const auto* b = bins->GetArray();
+      ss << '[';
+      for (int i=0; i<n; ++i) {
+        if (i) ss << ',';
+        ss << b[i];
+      }
+      ss << ']';
+    } else {
+      n = a->GetNbins();
+      ss << '('
+         << n << ", "
+         << a->GetXmin() << ", "
+         << a->GetXmax()
+         << ')';
+    }
+  }
+  cout << ss.rdbuf() << '\n';
+}
+
 void print(TH1* hist) {
   cout << '\n';
   TList* fcns = hist->GetListOfFunctions();
+  const bool has_fcns = fcns && fcns->GetEntries() > 0;
   if (opt_t) {
     const char* title = hist->GetTitle();
-    if (non_empty_diff(title,hist->GetName())) {
-      print_indent_prop(fcns && fcns->GetEntries() > 0);
+    if (non_empty_cmp(title,hist->GetName())) {
+      print_indent_prop(has_fcns);
       cout << title << '\n';
     }
+  }
+  if (opt_b) {
+    print_indent_prop(has_fcns);
+    print_hist_binning(hist);
+  }
+  if (opt_i) {
+    print_indent_prop(has_fcns);
+    cout << "∫: " << hist->Integral(0,-1) << '\n';
   }
   print(fcns,false);
 }
@@ -367,7 +409,7 @@ void print(TObject* obj) {
     print(class_name,name,"\033[34m");
     if (opt_t) {
       const char* title = obj->GetTitle();
-      if (non_empty_diff(title,name)) {
+      if (non_empty_cmp(title,name)) {
         cout << '\n';
         print_indent_prop();
         cout << "    " << title;
@@ -383,11 +425,11 @@ void print_usage(const char* prog) {
 #ifdef HAS_UNISTD_H
     "  -c           force color output\n"
     "  -C           do not color output\n"
+    "  -p           use Print() or ls()\n"
     "  -s           print file size\n"
     "  -t           print objects' titles\n"
     "  -b           print histograms' binning\n"
     "  -i           print histograms' integrals\n"
-    "  -p           use Print() or ls()\n"
 #endif
     "  --ls         call TFile::ls()\n"
     "  --map        call TFile::Map()\n"
