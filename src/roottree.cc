@@ -421,7 +421,7 @@ void print(TObject* obj) {
 
 void print_usage(const char* prog) {
   cout << "usage: " << prog <<
-    " [OPTION]... file.root [names of objects]\n"
+    " [options]... file.root [objects]...\n"
 #ifdef HAS_UNISTD_H
     "  -c           force color output\n"
     "  -C           do not color output\n"
