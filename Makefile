@@ -15,13 +15,13 @@ ROOT_LIBDIR   := $(shell root-config --libdir)
 ROOT_LDFLAGS  := $(shell root-config --ldflags) -Wl,-rpath,$(ROOT_LIBDIR)
 ROOT_LDLIBS   := $(shell root-config --libs)
 
-EXE := bin/roottree
+EXE := bin/rootbr
 
 all: $(EXE)
 
-C_roottree := $(ROOT_CPPFLAGS)
-LF_roottree := $(ROOT_LDFLAGS)
-L_roottree := -L$(ROOT_LIBDIR) -lCore -lRIO -lTree -lHist
+C_rootbr := $(ROOT_CPPFLAGS)
+LF_rootbr := $(ROOT_LDFLAGS)
+L_rootbr := -L$(ROOT_LIBDIR) -lCore -lRIO -lTree -lHist
 
 #####################################################################
 

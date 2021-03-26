@@ -9,6 +9,7 @@
 #include <locale>
 #include <stdexcept>
 #include <cstring>
+#include <cstdlib>
 
 #include <TFile.h>
 #include <TTree.h>
@@ -54,6 +55,8 @@ bool opt_s = false, // print file size
      opt_map = false,
      opt_ls = false,
      opt_streamer = false;
+
+int max_depth = 0;
 
 double file_size(const char* name) {
 #ifdef HAS_SYS_STAT_H
@@ -316,8 +319,10 @@ void print(TList* list, bool keys=true) {
     } else if (inherits_from<TDirectory>(class_ptr)) {
       print(class_name,name,"\033[1;34m",cycle);
       cout << '\n';
-      if (keys) item = static_cast<TKey*>(item)->ReadObj();
-      print(static_cast<TDirectory*>(item)->GetListOfKeys());
+      if (max_depth==0 || (int)indent.size() < max_depth) {
+        if (keys) item = static_cast<TKey*>(item)->ReadObj();
+        print(static_cast<TDirectory*>(item)->GetListOfKeys());
+      }
     } else if (inherits_from<TH1>(class_ptr)) {
       print(class_name,name,"\033[34m",cycle);
       if (keys) item = static_cast<TKey*>(item)->ReadObj();
@@ -407,7 +412,8 @@ void print(TObject* obj) {
     print(class_name,name,"\033[1;34m");
     cout << '\n';
     indent.emplace_back();
-    print(p->GetListOfKeys());
+    if (max_depth==0 || (int)indent.size() < max_depth)
+      print(p->GetListOfKeys());
     indent.pop_back();
   } else if (TH1* p = dynamic_cast<TH1*>(obj)) {
     print(class_name,name,"\033[34m");
@@ -430,15 +436,16 @@ void print(TObject* obj) {
 
 void print_usage(const char* prog) {
   cout << "usage: " << prog <<
-    " [options]... file.root [objects]...\n"
+    " [options...] file.root [objects...]\n"
 #ifdef HAS_UNISTD_H
+    "  -b           print histograms' binning\n"
     "  -c           force color output\n"
-    "  -C           do not color output\n"
+    "  -C           don't color output\n"
+    "  -d           max directory depth\n"
+    "  -i           print histograms' integrals\n"
     "  -p           use Print() or ls()\n"
     "  -s           print file size\n"
     "  -t           print objects' titles\n"
-    "  -b           print histograms' binning\n"
-    "  -i           print histograms' integrals\n"
     "  -T           don't print TTree branches\n"
 #endif
     "  --ls         call TFile::ls()\n"
@@ -471,7 +478,7 @@ int main(int argc, char** argv) {
     } else ++i;
   }
 #ifdef HAS_UNISTD_H
-  for (int o; (o = getopt(argc,argv,"hcCstbipT")) != -1; ) {
+  for (int o; (o = getopt(argc,argv,"hcCstbipTd:")) != -1; ) {
     switch (o) {
       case 'c': opt_c = opt_true;  break;
       case 'C': opt_c = opt_false; break;
@@ -481,6 +488,12 @@ int main(int argc, char** argv) {
       case 'i': opt_i = true; break;
       case 'p': opt_p = true; break;
       case 'T': opt_T = true; break;
+      case 'd':
+        if ((max_depth = atoi(optarg)) <= 0) {
+          cerr << "-d: depth argument must be a positive number\n";
+          return 1;
+        }
+        break;
       case 'h': print_usage(argv[0]); return 0;
       default : return 1;
     }
@@ -516,7 +529,10 @@ int main(int argc, char** argv) {
     if (opt_p) file.ls();
     else print(file.GetListOfKeys());
   } else {
+    bool first = true;
     for (; optind<argc; ++optind) {
+      if (first) first = false;
+      else cout << '\n';
       const char* objname = argv[optind];
       TObject* obj = file.Get(objname);
       if (!obj) {
