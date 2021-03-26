@@ -1,3 +1,8 @@
+// Program for printing contents of CERN ROOT files
+// Written by Ivan Pogrebnyak
+// ivan.pogrebnyak@cern.ch
+// https://github.com/ivankp/roottree
+
 #include <iostream>
 #include <sstream>
 #include <vector>
