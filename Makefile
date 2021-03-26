@@ -1,4 +1,4 @@
-.PHONY: all clean
+.PHONY: all clean install
 
 ifeq (0, $(words $(findstring $(MAKECMDGOALS), clean))) #############
 
@@ -10,11 +10,14 @@ CXXFLAGS := -Wall -O3 -flto -fmax-errors=3
 DEPFLAGS = -MT $@ -MMD -MP -MF .build/$*.d
 
 ROOT_CPPFLAGS := $(shell root-config --cflags)
+ROOT_PREFIX   := $(shell root-config --prefix)
 ROOT_LIBDIR   := $(shell root-config --libdir)
 ROOT_LDFLAGS  := $(shell root-config --ldflags) -Wl,-rpath,$(ROOT_LIBDIR)
 ROOT_LDLIBS   := $(shell root-config --libs)
 
-all: bin/roottree
+EXE := bin/roottree
+
+all: $(EXE)
 
 C_roottree := $(ROOT_CPPFLAGS)
 LF_roottree := $(ROOT_LDFLAGS)
@@ -33,6 +36,12 @@ bin/%: .build/%.o
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(DEPFLAGS) $(C_$*) -c $(filter %.cc,$^) -o $@
 
 -include $(shell [ -d .build ] && find .build -type f -name '*.d')
+
+install: all
+	@: "$${PREFIX:=$(ROOT_PREFIX)}"; \
+	 for f in $(EXE); do \
+	   install -m 775 -vD "$$f" "$$PREFIX/$$f"; \
+	 done
 
 endif ###############################################################
 
