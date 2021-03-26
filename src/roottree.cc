@@ -45,6 +45,7 @@ bool opt_s = false, // print file size
      opt_b = false, // print histograms' binning
      opt_i = false, // print histograms' integrals
      opt_p = false, // use Print() for specified objects
+     opt_T = false, // don't print TTree branches
      opt_map = false,
      opt_ls = false,
      opt_streamer = false;
@@ -303,8 +304,10 @@ void print(TList* list, bool keys=true) {
       cout << '\n';
     } else if (inherits_from<TTree>(class_ptr)) {
       print(class_name,name,"\033[1;32m",cycle);
-      if (keys) item = static_cast<TKey*>(item)->ReadObj();
-      print(static_cast<TTree*>(item));
+      if (!opt_T) {
+        if (keys) item = static_cast<TKey*>(item)->ReadObj();
+        print(static_cast<TTree*>(item));
+      } else cout << '\n';
     } else if (inherits_from<TDirectory>(class_ptr)) {
       print(class_name,name,"\033[1;34m",cycle);
       cout << '\n';
@@ -390,9 +393,11 @@ void print(TObject* obj) {
   const char* const name = obj->GetName();
   if (TTree* p = dynamic_cast<TTree*>(obj)) {
     print(class_name,name,"\033[1;32m");
-    indent.emplace_back();
-    print(p);
-    indent.pop_back();
+    if (!opt_T) {
+      indent.emplace_back();
+      print(p);
+      indent.pop_back();
+    }
   } else if (TDirectory* p = dynamic_cast<TDirectory*>(obj)) {
     print(class_name,name,"\033[1;34m");
     cout << '\n';
@@ -429,6 +434,7 @@ void print_usage(const char* prog) {
     "  -t           print objects' titles\n"
     "  -b           print histograms' binning\n"
     "  -i           print histograms' integrals\n"
+    "  -T           don't print TTree branches\n"
 #endif
     "  --ls         call TFile::ls()\n"
     "  --map        call TFile::Map()\n"
@@ -460,7 +466,7 @@ int main(int argc, char** argv) {
     } else ++i;
   }
 #ifdef HAS_UNISTD_H
-  for (int o; (o = getopt(argc,argv,"hcCstbip")) != -1; ) {
+  for (int o; (o = getopt(argc,argv,"hcCstbipT")) != -1; ) {
     switch (o) {
       case 'c': opt_c = opt_true;  break;
       case 'C': opt_c = opt_false; break;
@@ -469,6 +475,7 @@ int main(int argc, char** argv) {
       case 'b': opt_b = true; break;
       case 'i': opt_i = true; break;
       case 'p': opt_p = true; break;
+      case 'T': opt_T = true; break;
       case 'h': print_usage(argv[0]); return 0;
       default : return 1;
     }
