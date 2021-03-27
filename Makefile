@@ -40,7 +40,7 @@ bin/%: .build/%.o
 install: all
 	@: "$${PREFIX:=$(ROOT_PREFIX)}"; \
 	 for f in $(EXE); do \
-	   install -m 775 -vD "$$f" "$$PREFIX/$$f"; \
+	   install -m 755 -vD "$$f" "$$PREFIX/$$f"; \
 	 done
 
 endif ###############################################################
