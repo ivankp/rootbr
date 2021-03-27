@@ -58,3 +58,6 @@ This is useful for instpecting specific directories in a large directory tree or
 specific `TTree`s in a file that contains multiple.
 
 The `-d` option, taking a numeric argument, allows to limit the depth of traversal of directories.
+
+# Ideas to implement
+- Print objects contained in `TCanvas`, such as histograms, graphs, etc.
