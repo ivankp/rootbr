@@ -12,13 +12,14 @@
 #include <cstdlib>
 
 #include <TFile.h>
-#include <TTree.h>
 #include <TKey.h>
+#include <TTree.h>
 #include <TBranch.h>
 #include <TBranchElement.h>
 #include <TBranchSTL.h>
 #include <TBranchObject.h>
 #include <TLeaf.h>
+#include <TFolder.h>
 #include <TH1.h>
 
 #ifdef __has_include
@@ -288,6 +289,7 @@ void print(TTree* tree) {
   indent.pop_back();
 }
 
+void print(TCollection* xs);
 void print(TH1* hist);
 
 void print(TList* list, bool keys=true) {
@@ -310,12 +312,7 @@ void print(TList* list, bool keys=true) {
     if (!class_ptr) {
       print(class_name,name,"\033[1;31m",cycle);
       cout << '\n';
-    } else if (inherits_from<TTree>(class_ptr)) {
-      print(class_name,name,"\033[1;32m",cycle);
-      if (!opt_T) {
-        if (keys) item = static_cast<TKey*>(item)->ReadObj();
-        print(static_cast<TTree*>(item));
-      } else cout << '\n';
+
     } else if (inherits_from<TDirectory>(class_ptr)) {
       print(class_name,name,"\033[1;34m",cycle);
       cout << '\n';
@@ -323,10 +320,27 @@ void print(TList* list, bool keys=true) {
         if (keys) item = static_cast<TKey*>(item)->ReadObj();
         print(static_cast<TDirectory*>(item)->GetListOfKeys());
       }
+
+    } else if (inherits_from<TFolder>(class_ptr)) {
+      print(class_name,name,"\033[1;34m",cycle);
+      cout << '\n';
+      if (max_depth==0 || (int)indent.size() < max_depth) {
+        if (keys) item = static_cast<TKey*>(item)->ReadObj();
+        print(static_cast<TFolder*>(item)->GetListOfFolders());
+      }
+
+    } else if (inherits_from<TTree>(class_ptr)) {
+      print(class_name,name,"\033[1;32m",cycle);
+      if (!opt_T) {
+        if (keys) item = static_cast<TKey*>(item)->ReadObj();
+        print(static_cast<TTree*>(item));
+      } else cout << '\n';
+
     } else if (inherits_from<TH1>(class_ptr)) {
       print(class_name,name,"\033[34m",cycle);
       if (keys) item = static_cast<TKey*>(item)->ReadObj();
       print(static_cast<TH1*>(item));
+
     } else {
       print(class_name,name,"\033[34m",cycle);
       if (opt_t) {
@@ -339,6 +353,7 @@ void print(TList* list, bool keys=true) {
         }
       }
       cout << '\n';
+
     }
   }
   indent.pop_back();
@@ -401,25 +416,27 @@ void print(TH1* hist) {
 void print(TObject* obj) {
   const char* const class_name = obj->ClassName();
   const char* const name = obj->GetName();
-  if (TTree* p = dynamic_cast<TTree*>(obj)) {
-    print(class_name,name,"\033[1;32m");
-    if (!opt_T) {
-      indent.emplace_back();
-      print(p);
-      indent.pop_back();
-    }
-  } else if (TDirectory* p = dynamic_cast<TDirectory*>(obj)) {
+  if (TDirectory* p = dynamic_cast<TDirectory*>(obj)) {
     print(class_name,name,"\033[1;34m");
     cout << '\n';
-    indent.emplace_back();
     if (max_depth==0 || (int)indent.size() < max_depth)
       print(p->GetListOfKeys());
-    indent.pop_back();
+
+  } else if (TFolder* p = dynamic_cast<TFolder*>(obj)) {
+    print(class_name,name,"\033[1;34m");
+    cout << '\n';
+    if (max_depth==0 || (int)indent.size() < max_depth)
+      print(p->GetListOfFolders());
+
+  } else if (TTree* p = dynamic_cast<TTree*>(obj)) {
+    print(class_name,name,"\033[1;32m");
+    if (!opt_T)
+      print(p);
+
   } else if (TH1* p = dynamic_cast<TH1*>(obj)) {
     print(class_name,name,"\033[34m");
-    indent.emplace_back();
     print(p);
-    indent.pop_back();
+
   } else {
     print(class_name,name,"\033[34m");
     if (opt_t) {
@@ -431,6 +448,20 @@ void print(TObject* obj) {
       }
     }
     cout << '\n';
+
+  }
+}
+
+void print(TCollection* coll) {
+  const Int_t n = coll->GetEntries();
+  if (n > 0) {
+    Int_t i = 0;
+    indent.emplace_back();
+    for (TObject* item : *coll) {
+      print_indent(++i == n);
+      print(item);
+    }
+    indent.pop_back();
   }
 }
 
@@ -530,6 +561,7 @@ int main(int argc, char** argv) {
     else print(file.GetListOfKeys());
   } else {
     bool first = true;
+    indent.emplace_back();
     for (; optind<argc; ++optind) {
       if (first) first = false;
       else cout << '\n';
@@ -544,5 +576,6 @@ int main(int argc, char** argv) {
         else obj->Print();
       } else print(obj);
     }
+    indent.pop_back();
   }
 }
