@@ -21,7 +21,7 @@ all: $(EXE)
 
 C_rootbr := $(ROOT_CPPFLAGS)
 LF_rootbr := $(ROOT_LDFLAGS)
-L_rootbr := -L$(ROOT_LIBDIR) -lCore -lRIO -lTree -lHist
+L_rootbr := -L$(ROOT_LIBDIR) -lCore -lRIO -lTree -lHist -lGpad
 
 #####################################################################
 

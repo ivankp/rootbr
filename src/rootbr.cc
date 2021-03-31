@@ -21,6 +21,7 @@
 #include <TLeaf.h>
 #include <TFolder.h>
 #include <TH1.h>
+#include <TPad.h>
 
 #ifdef __has_include
 #  if __has_include(<sys/stat.h>)
@@ -177,6 +178,11 @@ void print(TObject* obj) {
       print(class_name,name,"\033[34m",cycle);
       print(dynamic_cast<TH1*>(key->ReadObj()));
 
+    } else if (inherits_from<TPad>(class_ptr)) {
+      print(class_name,name,"\033[34m",cycle);
+      cout << '\n';
+      print(dynamic_cast<TPad*>(key->ReadObj())->GetListOfPrimitives());
+
     } else if (inherits_from<TCollection>(class_ptr)) {
       print(class_name,name,"\033[1;34m",cycle);
       cout << '\n';
@@ -220,6 +226,11 @@ void print(TObject* obj) {
     } else if (auto* p = dynamic_cast<TH1*>(obj)) {
       print(class_name,name,"\033[34m");
       print(p);
+
+    } else if (auto* p = dynamic_cast<TPad*>(obj)) {
+      print(class_name,name,"\033[34m");
+      cout << '\n';
+      print(p->GetListOfPrimitives());
 
     } else if (auto* p = dynamic_cast<TCollection*>(obj)) {
       print(class_name,name,"\033[1;34m");
