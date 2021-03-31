@@ -134,6 +134,131 @@ void print(
   }
 }
 
+// ******************************************************************
+void print(TObject*);
+void print(TKey*);
+void print(TCollection*);
+void print(TTree*);
+void print(TBranch*, bool last);
+void print(TH1*);
+// ******************************************************************
+
+void print(TObject* obj) {
+  const char* const name = obj->GetName();
+
+  if (auto* key = dynamic_cast<TKey*>(obj)) {
+    const Short_t cycle = key->GetCycle();
+    const char* const class_name = key->GetClassName();
+    TClass* const class_ptr = TClass::GetClass(class_name,true,true);
+
+    if (!class_ptr) {
+      print(class_name,name,"\033[1;31m",cycle);
+      cout << '\n';
+
+    } else if (inherits_from<TDirectory>(class_ptr)) {
+      print(class_name,name,"\033[1;34m",cycle);
+      cout << '\n';
+      if (max_depth==0 || (int)indent.size() < max_depth)
+        print(static_cast<TDirectory*>(key->ReadObj())->GetListOfKeys());
+
+    } else if (inherits_from<TFolder>(class_ptr)) {
+      print(class_name,name,"\033[1;34m",cycle);
+      cout << '\n';
+      if (max_depth==0 || (int)indent.size() < max_depth)
+        print(static_cast<TFolder*>(key->ReadObj())->GetListOfFolders());
+
+    } else if (inherits_from<TTree>(class_ptr)) {
+      print(class_name,name,"\033[1;32m",cycle);
+      if (!opt_T) {
+        print(static_cast<TTree*>(key->ReadObj()));
+      } else cout << '\n';
+
+    } else if (inherits_from<TH1>(class_ptr)) {
+      print(class_name,name,"\033[34m",cycle);
+      print(static_cast<TH1*>(key->ReadObj()));
+
+    } else if (inherits_from<TCollection>(class_ptr)) {
+      print(class_name,name,"\033[1;34m",cycle);
+      cout << '\n';
+      if (max_depth==0 || (int)indent.size() < max_depth)
+        print(static_cast<TCollection*>(key->ReadObj()));
+
+    } else {
+      print(class_name,name,"\033[34m",cycle);
+      if (opt_t) {
+        const char* title = key->ReadObj()->GetTitle();
+        if (non_empty_cmp(title,name)) {
+          cout << '\n';
+          print_indent_prop();
+          cout << "    " << title;
+        }
+      }
+      cout << '\n';
+
+    }
+
+  } else {
+    const char* const class_name = obj->ClassName();
+
+    if (auto* p = dynamic_cast<TDirectory*>(obj)) {
+      print(class_name,name,"\033[1;34m");
+      cout << '\n';
+      if (max_depth==0 || (int)indent.size() < max_depth)
+        print(p->GetListOfKeys());
+
+    } else if (auto* p = dynamic_cast<TFolder*>(obj)) {
+      print(class_name,name,"\033[1;34m");
+      cout << '\n';
+      if (max_depth==0 || (int)indent.size() < max_depth)
+        print(p->GetListOfFolders());
+
+    } else if (auto* p = dynamic_cast<TTree*>(obj)) {
+      print(class_name,name,"\033[1;32m");
+      if (!opt_T)
+        print(p);
+
+    } else if (auto* p = dynamic_cast<TH1*>(obj)) {
+      print(class_name,name,"\033[34m");
+      print(p);
+
+    } else if (auto* p = dynamic_cast<TCollection*>(obj)) {
+      print(class_name,name,"\033[1;34m");
+      cout << '\n';
+      if (max_depth==0 || (int)indent.size() < max_depth)
+        print(p);
+
+    } else {
+      print(class_name,name,"\033[34m");
+      if (opt_t) {
+        const char* title = obj->GetTitle();
+        if (non_empty_cmp(title,name)) {
+          cout << '\n';
+          print_indent_prop();
+          cout << "    " << title;
+        }
+      }
+      cout << '\n';
+
+    }
+  }
+}
+
+void print(TCollection* coll) {
+  auto it = coll->begin();
+  const auto end = coll->end();
+  if (it != end) {
+    indent.emplace_back();
+    for (;;) {
+      TObject* item = *it;
+      const bool last = ++it == end;
+      print_indent(last);
+      print(item);
+      if (last) break;
+    }
+    indent.pop_back();
+  }
+}
+
 void print_branch(
   const char* class_name, const char* name, const char* color_str,
   const char* title
@@ -146,8 +271,6 @@ void print_branch(
   }
   cout << '\n';
 }
-
-void print(TBranch* b, bool last);
 
 void print_branch(TBranch* b, bool last) {
   const char* const bname = b->GetName();
@@ -289,76 +412,6 @@ void print(TTree* tree) {
   indent.pop_back();
 }
 
-void print(TCollection* xs);
-void print(TH1* hist);
-
-void print(TList* list, bool keys=true) {
-  indent.emplace_back();
-  TObject* const last = list->Last();
-  for (TObject* item : *list) {
-    const char* const name = item->GetName();
-    const char* class_name;
-    Short_t cycle = 1;
-    if (keys) {
-      class_name = static_cast<TKey*>(item)->GetClassName();
-      cycle = static_cast<TKey*>(item)->GetCycle();
-    } else {
-      class_name = item->ClassName();
-    }
-
-    print_indent(item == last);
-
-    TClass* const class_ptr = TClass::GetClass(class_name,true,true);
-    if (!class_ptr) {
-      print(class_name,name,"\033[1;31m",cycle);
-      cout << '\n';
-
-    } else if (inherits_from<TDirectory>(class_ptr)) {
-      print(class_name,name,"\033[1;34m",cycle);
-      cout << '\n';
-      if (max_depth==0 || (int)indent.size() < max_depth) {
-        if (keys) item = static_cast<TKey*>(item)->ReadObj();
-        print(static_cast<TDirectory*>(item)->GetListOfKeys());
-      }
-
-    } else if (inherits_from<TFolder>(class_ptr)) {
-      print(class_name,name,"\033[1;34m",cycle);
-      cout << '\n';
-      if (max_depth==0 || (int)indent.size() < max_depth) {
-        if (keys) item = static_cast<TKey*>(item)->ReadObj();
-        print(static_cast<TFolder*>(item)->GetListOfFolders());
-      }
-
-    } else if (inherits_from<TTree>(class_ptr)) {
-      print(class_name,name,"\033[1;32m",cycle);
-      if (!opt_T) {
-        if (keys) item = static_cast<TKey*>(item)->ReadObj();
-        print(static_cast<TTree*>(item));
-      } else cout << '\n';
-
-    } else if (inherits_from<TH1>(class_ptr)) {
-      print(class_name,name,"\033[34m",cycle);
-      if (keys) item = static_cast<TKey*>(item)->ReadObj();
-      print(static_cast<TH1*>(item));
-
-    } else {
-      print(class_name,name,"\033[34m",cycle);
-      if (opt_t) {
-        if (keys) item = static_cast<TKey*>(item)->ReadObj();
-        const char* title = item->GetTitle();
-        if (non_empty_cmp(title,name)) {
-          cout << '\n';
-          print_indent_prop();
-          cout << "    " << title;
-        }
-      }
-      cout << '\n';
-
-    }
-  }
-  indent.pop_back();
-}
-
 void print_hist_binning(TH1* h, bool sub) {
   std::stringstream ss;
   const TAxis* axes[3] { };
@@ -410,59 +463,7 @@ void print(TH1* hist) {
     print_indent_prop(has_fcns);
     cout << "∫: " << hist->Integral(0,-1) << '\n';
   }
-  print(fcns,false);
-}
-
-void print(TObject* obj) {
-  const char* const class_name = obj->ClassName();
-  const char* const name = obj->GetName();
-  if (TDirectory* p = dynamic_cast<TDirectory*>(obj)) {
-    print(class_name,name,"\033[1;34m");
-    cout << '\n';
-    if (max_depth==0 || (int)indent.size() < max_depth)
-      print(p->GetListOfKeys());
-
-  } else if (TFolder* p = dynamic_cast<TFolder*>(obj)) {
-    print(class_name,name,"\033[1;34m");
-    cout << '\n';
-    if (max_depth==0 || (int)indent.size() < max_depth)
-      print(p->GetListOfFolders());
-
-  } else if (TTree* p = dynamic_cast<TTree*>(obj)) {
-    print(class_name,name,"\033[1;32m");
-    if (!opt_T)
-      print(p);
-
-  } else if (TH1* p = dynamic_cast<TH1*>(obj)) {
-    print(class_name,name,"\033[34m");
-    print(p);
-
-  } else {
-    print(class_name,name,"\033[34m");
-    if (opt_t) {
-      const char* title = obj->GetTitle();
-      if (non_empty_cmp(title,name)) {
-        cout << '\n';
-        print_indent_prop();
-        cout << "    " << title;
-      }
-    }
-    cout << '\n';
-
-  }
-}
-
-void print(TCollection* coll) {
-  const Int_t n = coll->GetEntries();
-  if (n > 0) {
-    Int_t i = 0;
-    indent.emplace_back();
-    for (TObject* item : *coll) {
-      print_indent(++i == n);
-      print(item);
-    }
-    indent.pop_back();
-  }
+  print(fcns);
 }
 
 void print_usage(const char* prog) {
