@@ -159,29 +159,29 @@ void print(TObject* obj) {
       print(class_name,name,"\033[1;34m",cycle);
       cout << '\n';
       if (max_depth==0 || (int)indent.size() < max_depth)
-        print(static_cast<TDirectory*>(key->ReadObj())->GetListOfKeys());
+        print(dynamic_cast<TDirectory*>(key->ReadObj())->GetListOfKeys());
 
     } else if (inherits_from<TFolder>(class_ptr)) {
       print(class_name,name,"\033[1;34m",cycle);
       cout << '\n';
       if (max_depth==0 || (int)indent.size() < max_depth)
-        print(static_cast<TFolder*>(key->ReadObj())->GetListOfFolders());
+        print(dynamic_cast<TFolder*>(key->ReadObj())->GetListOfFolders());
 
     } else if (inherits_from<TTree>(class_ptr)) {
       print(class_name,name,"\033[1;32m",cycle);
       if (!opt_T) {
-        print(static_cast<TTree*>(key->ReadObj()));
+        print(dynamic_cast<TTree*>(key->ReadObj()));
       } else cout << '\n';
 
     } else if (inherits_from<TH1>(class_ptr)) {
       print(class_name,name,"\033[34m",cycle);
-      print(static_cast<TH1*>(key->ReadObj()));
+      print(dynamic_cast<TH1*>(key->ReadObj()));
 
     } else if (inherits_from<TCollection>(class_ptr)) {
       print(class_name,name,"\033[1;34m",cycle);
       cout << '\n';
       if (max_depth==0 || (int)indent.size() < max_depth)
-        print(static_cast<TCollection*>(key->ReadObj()));
+        print(dynamic_cast<TCollection*>(key->ReadObj()));
 
     } else {
       print(class_name,name,"\033[34m",cycle);
