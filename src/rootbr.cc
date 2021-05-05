@@ -36,29 +36,49 @@
 #  endif
 #endif
 
+#define STR1(x) #x
+#define STR(x) STR1(x)
+#define CAT1(a,b) a ## b
+#define CAT(a,b) CAT1(a,b)
+
 using std::cout;
 using std::cerr;
 using std::endl;
 
 enum opt_val : uint8_t { opt_false=0, opt_true=1, opt_auto=2 };
 
-opt_val opt_c = // color
+#define OPT_INIT_b 0
+#define OPT_INIT_B 1
+#define OPT_INIT_d 0
+#define OPT_INIT_I 0
+#define OPT_INIT_p 0
+#define OPT_INIT_s 0
+#define OPT_INIT_t 0
+#define OPT_INIT_T 0
+
 #ifdef HAS_UNISTD_H
-  opt_auto;
+#define OPT_INIT_c 2
 #else
-  opt_false;
+#define OPT_INIT_c 0
 #endif
-bool opt_s = false, // print file size
-     opt_t = false, // print objects' titles
-     opt_b = false, // print histograms' binning
-     opt_i = false, // print histograms' integrals
-     opt_p = false, // use Print() for specified objects
-     opt_T = false, // don't print TTree branches
-     opt_map = false,
-     opt_ls = false,
-     opt_streamer = false;
+
+opt_val opt_c = static_cast<opt_val>(OPT_INIT_c);
+bool
+  opt_b = OPT_INIT_b,
+  opt_B = OPT_INIT_B,
+  opt_I = OPT_INIT_I,
+  opt_p = OPT_INIT_p,
+  opt_s = OPT_INIT_s,
+  opt_t = OPT_INIT_t,
+  opt_T = OPT_INIT_T,
+  opt_map = false,
+  opt_ls = false,
+  opt_streamer = false;
 
 int max_depth = 0;
+
+#define TOGGLE(x) x = !x
+#define non_empty_cmp(a,b) a && *a && strcmp(a,b)
 
 double file_size(const char* name) {
 #ifdef HAS_SYS_STAT_H
@@ -83,8 +103,6 @@ void print_file_size(const char* name) {
   cout << ss.rdbuf();
   cout.flush();
 }
-
-#define non_empty_cmp(a,b) a && *a && strcmp(a,b)
 
 template <typename T>
 bool inherits_from(TClass* c) {
@@ -125,14 +143,14 @@ void print(
 }
 void print(
   const char* class_name, const char* name, const char* color_str,
-  Short_t cycle
+  Short_t cycle, const char* t
 ) {
   print(class_name,name,color_str);
-  if (cycle!=1) {
-    if (opt_c) cout << "\033[2;37m;";
-    cout << cycle;
-    if (opt_c) cout << "\033[0m";
-  }
+  const bool c = opt_c && ( (cycle!=1) || t );
+  if (c) cout << "\033[2;37m";
+  if (cycle!=1) cout << ';' << cycle;
+  if (t) cout << ' ' << t;
+  if (c) cout << "\033[0m";
 }
 
 // ******************************************************************
@@ -151,46 +169,47 @@ void print(TObject* obj) {
     const Short_t cycle = key->GetCycle();
     const char* const class_name = key->GetClassName();
     TClass* const class_ptr = TClass::GetClass(class_name,true,true);
+    const char* t = opt_T ? key->GetDatime().AsSQLString() : nullptr;
 
     if (!class_ptr) {
-      print(class_name,name,"\033[1;31m",cycle);
+      print(class_name,name,"\033[1;31m",cycle,t);
       cout << '\n';
 
     } else if (inherits_from<TDirectory>(class_ptr)) {
-      print(class_name,name,"\033[1;34m",cycle);
+      print(class_name,name,"\033[1;34m",cycle,t);
       cout << '\n';
       if (max_depth==0 || (int)indent.size() < max_depth)
         print(dynamic_cast<TDirectory*>(key->ReadObj())->GetListOfKeys());
 
     } else if (inherits_from<TFolder>(class_ptr)) {
-      print(class_name,name,"\033[1;34m",cycle);
+      print(class_name,name,"\033[1;34m",cycle,t);
       cout << '\n';
       if (max_depth==0 || (int)indent.size() < max_depth)
         print(dynamic_cast<TFolder*>(key->ReadObj())->GetListOfFolders());
 
     } else if (inherits_from<TTree>(class_ptr)) {
-      print(class_name,name,"\033[1;32m",cycle);
-      if (!opt_T) {
+      print(class_name,name,"\033[1;32m",cycle,t);
+      if (opt_B) {
         print(dynamic_cast<TTree*>(key->ReadObj()));
       } else cout << '\n';
 
     } else if (inherits_from<TH1>(class_ptr)) {
-      print(class_name,name,"\033[34m",cycle);
+      print(class_name,name,"\033[34m",cycle,t);
       print(dynamic_cast<TH1*>(key->ReadObj()));
 
     } else if (inherits_from<TPad>(class_ptr)) {
-      print(class_name,name,"\033[34m",cycle);
+      print(class_name,name,"\033[34m",cycle,t);
       cout << '\n';
       print(dynamic_cast<TPad*>(key->ReadObj())->GetListOfPrimitives());
 
     } else if (inherits_from<TCollection>(class_ptr)) {
-      print(class_name,name,"\033[1;34m",cycle);
+      print(class_name,name,"\033[1;34m",cycle,t);
       cout << '\n';
       if (max_depth==0 || (int)indent.size() < max_depth)
         print(dynamic_cast<TCollection*>(key->ReadObj()));
 
     } else {
-      print(class_name,name,"\033[34m",cycle);
+      print(class_name,name,"\033[34m",cycle,t);
       if (opt_t) {
         const char* title = key->ReadObj()->GetTitle();
         if (non_empty_cmp(title,name)) {
@@ -220,7 +239,7 @@ void print(TObject* obj) {
 
     } else if (auto* p = dynamic_cast<TTree*>(obj)) {
       print(class_name,name,"\033[1;32m");
-      if (!opt_T)
+      if (opt_B)
         print(p);
 
     } else if (auto* p = dynamic_cast<TH1*>(obj)) {
@@ -470,26 +489,32 @@ void print(TH1* hist) {
   }
   if (opt_b)
     print_hist_binning(hist,has_fcns);
-  if (opt_i) {
+  if (opt_I) {
     print_indent_prop(has_fcns);
     cout << "∫: " << hist->Integral(0,-1) << '\n';
   }
   print(fcns);
 }
 
+#define INIT_VAL_STR_0 "off "
+#define INIT_VAL_STR_1 "on  "
+#define INIT_VAL_STR_2 "auto"
+#define OPT_INIT_VAL_STR(o) "[" CAT(INIT_VAL_STR_,CAT(OPT_INIT_,o)) "]"
+
 void print_usage(const char* prog) {
-  cout << "usage: " << prog <<
-    " [options...] file.root [objects...]\n"
+  cout << "usage: " << prog << " [options...] file.root [objects...]\n"
 #ifdef HAS_UNISTD_H
-    "  -b           print histograms' binning\n"
-    "  -c           force color output\n"
-    "  -C           don't color output\n"
-    "  -d           max directory depth\n"
-    "  -i           print histograms' integrals\n"
-    "  -p           use Print() or ls()\n"
-    "  -s           print file size\n"
-    "  -t           print objects' titles\n"
-    "  -T           don't print TTree branches\n"
+    "  -b           " OPT_INIT_VAL_STR(b) " histograms' binning\n"
+    "  -B           " OPT_INIT_VAL_STR(B) " TTree branches\n"
+    "  -c           " OPT_INIT_VAL_STR(c) " color output\n"
+    "  -d [depth]   [" STR(OPT_INIT_d) "   ]"
+      " directory traversal (0 = all)\n"
+    "  -I           " OPT_INIT_VAL_STR(I) " histograms' integrals\n"
+    "  -p           " OPT_INIT_VAL_STR(p)
+      " use Print() for objects and ls() for directories\n"
+    "  -s           " OPT_INIT_VAL_STR(s) " file size\n"
+    "  -t           " OPT_INIT_VAL_STR(t) " objects' titles\n"
+    "  -T           " OPT_INIT_VAL_STR(T) " objects' timestamps\n"
 #endif
     "  --ls         call TFile::ls()\n"
     "  --map        call TFile::Map()\n"
@@ -511,8 +536,8 @@ int main(int argc, char** argv) {
       } else if (!strcmp(arg,"ls")) { opt_ls = true;
       } else if (!strcmp(arg,"map")) { opt_map = true;
       } else if (!strcmp(arg,"streamer")) { opt_streamer = true;
-      } else {
-        cerr << "invalid option --" << arg << '\n';
+      } else if (*arg) {
+        cerr << argv[0] << ": invalid option --" << arg << '\n';
         return 1;
       }
       --argc;
@@ -521,24 +546,52 @@ int main(int argc, char** argv) {
     } else ++i;
   }
 #ifdef HAS_UNISTD_H
-  for (int o; (o = getopt(argc,argv,"hcCstbipTd:")) != -1; ) {
+  opterr = 0;
+  for (int o; (o = getopt(argc,argv,":hbBcd:IpstT")) != -1; ) {
     switch (o) {
-      case 'c': opt_c = opt_true;  break;
-      case 'C': opt_c = opt_false; break;
-      case 's': opt_s = true; break;
-      case 't': opt_t = true; break;
-      case 'b': opt_b = true; break;
-      case 'i': opt_i = true; break;
-      case 'p': opt_p = true; break;
-      case 'T': opt_T = true; break;
+      case 'h': print_usage(argv[0]); return 0;
+      case 'b': TOGGLE(opt_b); break;
+      case 'B': TOGGLE(opt_B); break;
+      case 'c': opt_c = (opt_c==opt_true ? opt_false : opt_true); break;
+      case 'I': TOGGLE(opt_I); break;
+      case 'p': TOGGLE(opt_p); break;
+      case 's': TOGGLE(opt_s); break;
+      case 't': TOGGLE(opt_t); break;
+      case 'T': TOGGLE(opt_T); break;
       case 'd':
-        if ((max_depth = atoi(optarg)) <= 0) {
-          cerr << "-d: depth argument must be a positive number\n";
+        if (optarg[0]=='-' && *std::find(argv,argv+argc,optarg)) {
+          TOGGLE(max_depth);
+          --optind;
+        } else if ([]{
+          const char* s = optarg;
+          for (char c; (c = *s); ++s)
+            if (c < '0' || '9' < c) return true;
+          return false;
+        }()) {
+          cerr << argv[0]
+            << ": option -d argument must be a nonnegative integer\n";
           return 1;
+        } else max_depth = atoi(optarg);
+        break;
+      case ':':
+        switch (optopt) {
+          case 'd': TOGGLE(max_depth); break;
+          default :
+            cerr << argv[0] << ": option -" << (char)optopt
+              << " requires an argument\n";
+            return 1;
         }
         break;
-      case 'h': print_usage(argv[0]); return 0;
-      default : return 1;
+      case '?':
+        cerr << argv[0] << ": invalid option -";
+        if (optopt > 0) cerr << (char)optopt;
+        else cerr << '\'' << optopt << '\'';
+        cerr << '\n';
+      case '-':
+        cout << '-' << '\n';
+        return 2;
+      default :
+        return 1;
     }
   }
   if (!(optind<argc)) {
