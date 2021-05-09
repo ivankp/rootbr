@@ -376,107 +376,50 @@ void print_branch(
   cout << '\n';
 }
 
-void print_branch(TBranch* b, bool last) {
-  const char* const bname = b->GetName();
-  TObjArray* branches = b->GetListOfBranches();
-  const Int_t nbranches = branches->GetEntriesFast();
-  TObjArray* const leaves = b->GetListOfLeaves();
-  TLeaf* const last_leaf = static_cast<TLeaf*>(leaves->Last());
-  const char* const lname = last_leaf->GetName();
-  const char* const btitle = b->GetTitle();
-  if (nbranches) {
-    print_indent(false);
-    print_branch(b->GetClassName(), bname, "\033[1;35m",
-      strcmp(btitle,lname) ? btitle : nullptr);
-    if (b->GetNleaves() != 1 || strcmp(bname,lname)) {
-      indent.emplace_back();
-      for (TObject* l : *leaves) {
-        print_indent(l==last_leaf);
-        print_branch(
-          static_cast<TLeaf*>(l)->GetTypeName(),
-          static_cast<TLeaf*>(l)->GetName(),
-          "\033[35m",
-          static_cast<TLeaf*>(l)->GetTitle()
-        );
-      }
-      indent.pop_back();
-    }
-    for (Int_t i=0; i<nbranches; i++)
-      print(static_cast<TBranch*>(branches->At(i)), nbranches-i==1);
-  } else {
-    print_indent(last);
-    if (b->GetNleaves() == 1 && !strcmp(bname,lname)) {
-      print_branch(
-        last_leaf->GetTypeName() ?: b->GetClassName(),
-        bname,
-        "\033[35m",
-        last_leaf->GetTitle()
-      );
-    } else {
-      print_branch(
-        b->GetClassName(),
-        bname,
-        "\033[35m",
-        btitle
-      );
-
-      indent.emplace_back();
-      for (TObject* l : *leaves) {
-        print_indent(l==last_leaf);
-        print_branch(
-          static_cast<TLeaf*>(l)->GetTypeName(),
-          static_cast<TLeaf*>(l)->GetName(),
-          "\033[35m",
-          static_cast<TLeaf*>(l)->GetTitle()
-        );
-      }
-      indent.pop_back();
-    }
-  }
-}
-
 void print(TBranch* b, bool last) {
-  if (dynamic_cast<TBranchElement*>(b)) {
-    print_branch(b,last);
-  } else if (dynamic_cast<TBranchSTL*>(b)) {
-    print_branch(b,last);
-  } else if (dynamic_cast<TBranchObject*>(b)) {
-    print_branch(b,last);
+  const char* const bname = b->GetName();
+
+  TObjArray* const leaves = b->GetListOfLeaves();
+  const Int_t nleaves = b->GetNleaves();
+  TLeaf* const leaf =
+    nleaves==1 ? static_cast<TLeaf*>(leaves->First()) : nullptr;
+
+  TObjArray* branches = b->GetListOfBranches();
+  if (branches && branches->GetEntriesFast() <= 0) branches = nullptr;
+
+  print_indent(last);
+  bool indented = false;
+  if (leaf && !strcmp(bname,leaf->GetName())) {
+    const char* type = leaf->GetTypeName();
+    if (!type || !*type) type = b->GetClassName();
+    print_branch(type, bname, "\033[35m", leaf->GetTitle());
   } else {
-    print_indent(last);
-    const char* const bname = b->GetName();
-
-    TObjArray* const leaves = b->GetListOfLeaves();
-    TLeaf* const last_leaf = static_cast<TLeaf*>(leaves->Last());
-
-    if (b->GetNleaves() == 1 && !strcmp(bname,last_leaf->GetName())) {
-      print_branch(
-        last_leaf->GetTypeName(),
-        bname,
-        "\033[35m",
-        last_leaf->GetTitle()
-      );
-    } else {
-      print_branch(
-        b->GetClassName(),
-        bname,
-        "\033[35m",
-        b->GetTitle()
-      );
-
+    print_branch(b->GetClassName(), bname, "\033[35m", b->GetTitle());
+    if (nleaves > 0) {
       indent.emplace_back();
-      for (TObject* l : *leaves) {
-        print_indent(l==last_leaf);
+      indented = true;
+      for_coll(*leaves,[nb=!branches](TObject* leaf, bool last){
+        print_indent(last && nb);
         print_branch(
-          static_cast<TLeaf*>(l)->GetTypeName(),
-          static_cast<TLeaf*>(l)->GetName(),
-          "\033[35m",
-          static_cast<TLeaf*>(l)->GetTitle()
+          static_cast<TLeaf*>(leaf)->GetTypeName(),
+          static_cast<TLeaf*>(leaf)->GetName(),
+          "\033[32m",
+          static_cast<TLeaf*>(leaf)->GetTitle()
         );
-      }
-      indent.pop_back();
+      });
     }
   }
+
+  if (branches) {
+    if (!indented) {
+      indent.emplace_back();
+      indented = true;
+    }
+    for_coll(*branches,[](TObject* b, bool last){
+      print(static_cast<TBranch*>(b), last);
+    });
+  }
+  if (indented) indent.pop_back();
 }
 
 void print(TTree* tree) {
