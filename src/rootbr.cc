@@ -10,6 +10,8 @@
 #include <stdexcept>
 #include <cstring>
 #include <cstdlib>
+#include <algorithm>
+#include <charconv>
 
 #include <TFile.h>
 #include <TKey.h>
@@ -53,6 +55,7 @@ enum opt_val : uint8_t { opt_false=0, opt_true=1, opt_auto=2 };
 #define OPT_INIT_I 0
 #define OPT_INIT_p 0
 #define OPT_INIT_s 0
+#define OPT_INIT_S 0
 #define OPT_INIT_t 0
 #define OPT_INIT_T 0
 
@@ -69,6 +72,7 @@ bool
   opt_I = OPT_INIT_I,
   opt_p = OPT_INIT_p,
   opt_s = OPT_INIT_s,
+  opt_S = OPT_INIT_S,
   opt_t = OPT_INIT_t,
   opt_T = OPT_INIT_T,
   opt_map = false,
@@ -102,6 +106,53 @@ void print_file_size(const char* name) {
   ss << std::fixed << size << ' ' << " kMGT"[i] << "B\n\n";
   cout << ss.rdbuf();
   cout.flush();
+}
+
+[[gnu::const]]
+char to_upper(char c) noexcept {
+  return (c < 'a' || 'z' < c) ? c : c-(char)32;
+}
+
+enum : char { NUMB, LETT, SYMB, CTRL, EXTD };
+
+[[gnu::const]]
+char char_cat(char c) noexcept {
+  if (c <   '\0') return EXTD;
+  if (c <    ' ') return CTRL;
+  if (c <    '0') return SYMB;
+  if (c <    ':') return NUMB;
+  if (c <    'A') return SYMB;
+  if (c <    '[') return LETT;
+  if (c < '\x7F') return SYMB;
+  return CTRL;
+}
+
+bool lex_str_less(std::string_view a, std::string_view b) noexcept {
+  const char* s1 = a.data();
+  const char* s2 = b.data();
+  const char* const z1 = s1 + a.size();
+  const char* const z2 = s2 + b.size();
+
+  for (char c1, c2; s1!=z1 && s2!=z2; ) {
+    c1 = to_upper(*s1);
+    c2 = to_upper(*s2);
+
+    const char t1 = char_cat(c1);
+    const char t2 = char_cat(c2);
+    if (t1 != t2) return t1 < t2;
+
+    if (t1 == NUMB) {
+      unsigned u1=0, u2=0;
+      s1 = std::from_chars(s1,z1,u1).ptr;
+      s2 = std::from_chars(s2,z2,u2).ptr;
+      if (u1 != u2) return u1 < u2;
+      continue;
+    } else if (c1 != c2) return c1 < c2;
+
+    ++s1, ++s2;
+  }
+
+  return (z1-s1) < (z2-s2);
 }
 
 template <typename T>
@@ -273,20 +324,43 @@ void print(TObject* obj) {
   }
 }
 
-void print(TCollection* coll) {
-  auto it = coll->begin();
-  const auto end = coll->end();
+template <typename T, typename F>
+void for_items(const T& items, F&& f) {
+  auto it = items.begin();
+  const auto end = items.end();
   if (it != end) {
-    indent.emplace_back();
     for (;;) {
       TObject* item = *it;
       const bool last = ++it == end;
-      print_indent(last);
-      print(item);
+      f(item,last);
       if (last) break;
     }
-    indent.pop_back();
   }
+}
+template <typename F>
+void for_coll(const TCollection& coll, F&& f) {
+  if (opt_s) {
+    std::vector<TObject*> items;
+    items.reserve(coll.GetEntries());
+    for (TObject* item : coll)
+      items.push_back(item);
+    std::stable_sort(items.begin(),items.end(),
+      [](const TObject* a, const TObject* b){
+        return lex_str_less(a->GetName(),b->GetName());
+      });
+    for_items(items,std::forward<F>(f));
+  } else {
+    for_items(coll,std::forward<F>(f));
+  }
+}
+
+void print(TCollection* coll) {
+  indent.emplace_back();
+  for_coll(*coll,[](TObject* item, bool last){
+    print_indent(last);
+    print(item);
+  });
+  indent.pop_back();
 }
 
 void print_branch(
@@ -411,34 +485,33 @@ void print(TTree* tree) {
   ss << tree->GetEntries();
   cout << " [" << ss.rdbuf() << "]\n";
 
-  TList* aliases = tree->GetListOfAliases();
-  const bool has_aliases = aliases && aliases->GetEntries() > 0;
-
   TObjArray* const branches = tree->GetListOfBranches();
-  TObject* const last_branch = branches->Last();
+
+  TList* aliases = tree->GetListOfAliases();
+  if (aliases && aliases->GetEntries() <= 0) aliases = nullptr;
 
   if (opt_t) {
     const char* title = tree->GetTitle();
     if (non_empty_cmp(title,tree->GetName())) {
-      print_indent_prop(branches->GetEntries() > 0 || has_aliases);
+      print_indent_prop(branches->GetEntries() > 0 || aliases);
       cout << title << '\n';
     }
   }
   indent.emplace_back();
 
-  for (TObject* b : *branches)
-    print(static_cast<TBranch*>(b), b == last_branch && !has_aliases);
+  for_coll(*branches,[na=!aliases](TObject* b, bool last){
+    print(static_cast<TBranch*>(b), last && na);
+  });
 
-  if (has_aliases) {
-    TObject* const last = aliases->Last();
-    for (TObject* alias : *aliases) {
-      print_indent(alias == last);
+  if (aliases)
+    for_coll(*aliases,[tree](TObject* alias, bool last){
+      print_indent(last);
       const char* name = alias->GetName();
       cout << name;
       cout << (opt_c ? " \033[36m->\033[0m " : " -> ");
       cout << tree->GetAlias(name) << '\n';
-    }
-  }
+    });
+
   indent.pop_back();
 }
 
@@ -503,6 +576,7 @@ void print(TH1* hist) {
 
 void print_usage(const char* prog) {
   cout << "usage: " << prog << " [options...] file.root [objects...]\n"
+    "* Short options can be passed multiple times to toggle the behavior\n"
 #ifdef HAS_UNISTD_H
     "  -b           " OPT_INIT_VAL_STR(b) " histograms' binning\n"
     "  -B           " OPT_INIT_VAL_STR(B) " TTree branches\n"
@@ -512,7 +586,8 @@ void print_usage(const char* prog) {
     "  -I           " OPT_INIT_VAL_STR(I) " histograms' integrals\n"
     "  -p           " OPT_INIT_VAL_STR(p)
       " use Print() for objects and ls() for directories\n"
-    "  -s           " OPT_INIT_VAL_STR(s) " file size\n"
+    "  -s           " OPT_INIT_VAL_STR(s) " sort listed items\n"
+    "  -S           " OPT_INIT_VAL_STR(S) " file size\n"
     "  -t           " OPT_INIT_VAL_STR(t) " objects' titles\n"
     "  -T           " OPT_INIT_VAL_STR(T) " objects' timestamps\n"
 #endif
@@ -547,7 +622,7 @@ int main(int argc, char** argv) {
   }
 #ifdef HAS_UNISTD_H
   opterr = 0;
-  for (int o; (o = getopt(argc,argv,":hbBcd:IpstT")) != -1; ) {
+  for (int o; (o = getopt(argc,argv,":hbBcd:IpsStT")) != -1; ) {
     switch (o) {
       case 'h': print_usage(argv[0]); return 0;
       case 'b': TOGGLE(opt_b); break;
@@ -556,6 +631,7 @@ int main(int argc, char** argv) {
       case 'I': TOGGLE(opt_I); break;
       case 'p': TOGGLE(opt_p); break;
       case 's': TOGGLE(opt_s); break;
+      case 'S': TOGGLE(opt_S); break;
       case 't': TOGGLE(opt_t); break;
       case 'T': TOGGLE(opt_T); break;
       case 'd':
@@ -605,7 +681,7 @@ int main(int argc, char** argv) {
   const char* fname = argv[optind];
   ++optind;
 
-  if (opt_s) {
+  if (opt_S) {
     try {
       print_file_size(fname);
     } catch (const std::exception& e) {
