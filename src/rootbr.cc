@@ -5,15 +5,13 @@
 
 #include <iostream>
 #include <sstream>
-#include <string>
-#include <string_view>
 #include <vector>
 #include <locale>
 #include <stdexcept>
 #include <cstring>
 #include <cstdlib>
 #include <algorithm>
-#include <charconv>
+#include <climits>
 
 #include <TFile.h>
 #include <TKey.h>
@@ -114,11 +112,9 @@ void print_file_size(const char* name) {
 char to_upper(char c) noexcept {
   return (c < 'a' || 'z' < c) ? c : c-(char)32;
 }
-
-enum : char { NUMB, LETT, SYMB, CTRL, EXTD };
-
+enum : char { SYMB, NUMB, LETT, CTRL, EXTD };
 [[gnu::const]]
-char char_cat(char c) noexcept {
+char char_type(char c) noexcept {
   if (c <   '\0') return EXTD;
   if (c <    ' ') return CTRL;
   if (c <    '0') return SYMB;
@@ -128,32 +124,39 @@ char char_cat(char c) noexcept {
   if (c < '\x7F') return SYMB;
   return CTRL;
 }
-
-bool lex_str_less(std::string_view a, std::string_view b) noexcept {
-  const char* s1 = a.data();
-  const char* s2 = b.data();
-  const char* const z1 = s1 + a.size();
-  const char* const z2 = s2 + b.size();
-
+bool lex_str_less(const char* s1, const char* s2) noexcept {
+  const char* const z1 = strchr(s1,'\0');
+  const char* const z2 = strchr(s2,'\0');
   for (char c1, c2; s1!=z1 && s2!=z2; ) {
     c1 = to_upper(*s1);
     c2 = to_upper(*s2);
 
-    const char t1 = char_cat(c1);
-    const char t2 = char_cat(c2);
+    const char t1 = char_type(c1);
+    const char t2 = char_type(c2);
     if (t1 != t2) return t1 < t2;
 
     if (t1 == NUMB) {
-      unsigned u1=0, u2=0;
-      s1 = std::from_chars(s1,z1,u1).ptr;
-      s2 = std::from_chars(s2,z2,u2).ptr;
+      char *end1, *end2;
+      auto u1 = strtoull(s1,&end1,0);
+      auto u2 = strtoull(s2,&end2,0);
+      if (u1==ULLONG_MAX && u2==ULLONG_MAX) {
+        const auto n1 = end1 - s1;
+        const auto n2 = end2 - s2;
+        const auto dn = n1 - n2;
+        if (dn < 0) s2 += dn;
+        else s1 -= dn;
+        const auto cmp = strncmp(s1,s2,n1<n2?n1:n2);
+        if (cmp < 0) u1 = 0;
+        else if (cmp > 0) u2 = 0;
+      }
+      s1 = end1;
+      s2 = end2;
       if (u1 != u2) return u1 < u2;
       continue;
     } else if (c1 != c2) return c1 < c2;
 
     ++s1, ++s2;
   }
-
   return (z1-s1) < (z2-s2);
 }
 
