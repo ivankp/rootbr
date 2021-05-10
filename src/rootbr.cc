@@ -514,6 +514,20 @@ void print(TH1* hist) {
   print(fcns);
 }
 
+TObject* get_object(TDirectory* dir, char* name) {
+  while (*name == '/') ++name;
+  for (char* p; (p = strchr(name,'/')); ) {
+    *p = '\0';
+    dir = dynamic_cast<TDirectory*>(dir->Get(name));
+    *p = '/';
+    if (!dir) return nullptr;
+    while (*++p == '/') ;
+    name = p;
+    if (!*name) return dir;
+  }
+  return dir->Get(name);
+}
+
 #define INIT_VAL_STR_0 "off "
 #define INIT_VAL_STR_1 "on  "
 #define INIT_VAL_STR_2 "auto"
@@ -648,8 +662,8 @@ int main(int argc, char** argv) {
     for (; optind<argc; ++optind) {
       if (first) first = false;
       else cout << '\n';
-      const char* objname = argv[optind];
-      TObject* obj = file.Get(objname);
+      char* objname = argv[optind];
+      TObject* obj = get_object(&file,objname);
       if (!obj) {
         cerr << "Cannot get object \"" << objname << "\"\n";
         return 1;
