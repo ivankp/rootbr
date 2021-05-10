@@ -608,9 +608,6 @@ int main(int argc, char** argv) {
         if (optopt > 0) cerr << (char)optopt;
         else cerr << '\'' << optopt << '\'';
         cerr << '\n';
-      case '-':
-        cout << '-' << '\n';
-        return 2;
       default :
         return 1;
     }
